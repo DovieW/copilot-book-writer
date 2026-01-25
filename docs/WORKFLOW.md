@@ -31,6 +31,18 @@ Typical usage:
 
 Default model: `gpt-5-mini` (override with `--model` or `COPILOT_MODEL`).
 
+## Web UI
+
+If you prefer a browser UI, run:
+
+- `npm run web:install`
+- `npm run dev`
+
+It shows:
+
+- Chat (left)
+- Live chapter stream + chapter files (right)
+
 If requirements are missing/unclear, the model will call a local tool to ask you questions in the terminal.
 
 ## Review loop

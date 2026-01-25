@@ -5,15 +5,26 @@
   "description": "Create full-length books incrementally using the GitHub Copilot SDK",
   "scripts": {
     "start": "tsx src/cli.ts",
+    "server": "tsx src/server/index.ts",
+    "dev:server": "tsx src/server/index.ts",
+    "web:install": "npm --prefix apps/web install",
+    "web:dev": "npm --prefix apps/web run dev",
+    "dev": "concurrently -n server,web \"npm run dev:server\" \"npm run web:dev\"",
     "write": "tsx src/cli.ts write",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.1.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "@types/node": "^22.19.6",
+    "@types/express": "^4.17.21",
+    "concurrently": "^9.1.2",
     "tsx": "^4.20.6",
     "typescript": "^5.0.0"
   },

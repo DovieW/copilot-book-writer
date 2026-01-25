@@ -38,6 +38,24 @@ Generate a first chunk:
 
 By default it uses the model `gpt-5-mini`. You can override with `--model` or `COPILOT_MODEL`.
 
+## Web UI
+
+There is also a simple web UI:
+
+- Chat on the left
+- Live chapter streaming + chapter files on the right
+
+Run it locally:
+
+1. `npm install`
+2. `npm run web:install`
+3. `npm run dev`
+
+This starts:
+
+- the backend server on `http://localhost:8787`
+- the frontend on `http://localhost:5173`
+
 The draft is written to `book/draft.md`.
 
 ## How to use (simple explanation)
