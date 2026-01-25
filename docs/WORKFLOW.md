@@ -26,6 +26,14 @@ The Node CLI (in `src/`) uses `@github/copilot-sdk` to talk to the Copilot CLI v
 
 Typical usage:
 
-- Generate a chunk: `npm run write -- --section "Chapter 1" --words 800`
+- Interactive session (recommended): `npm start`
+- Generate a chunk (non-interactive): `npm run write -- --section "Chapter 1" --words 800`
 
-If requirements are missing/unclear, the model can call a local tool to ask you questions in the terminal.
+If requirements are missing/unclear, the model will call a local tool to ask you questions in the terminal.
+
+## Review loop
+
+During `npm start`, the tool writes one paragraph (or small chunk) at a time and then asks you if you like it.
+
+- If you say it needs changes, you provide feedback and it updates the book files.
+- If the feedback implies a new rule (tone, character detail, plot rule), it also updates `requirements/feedback.md` so future writing stays consistent.

@@ -4,6 +4,7 @@ import process from "node:process";
 import { loadRequirementsMarkdown } from "./requirements.js";
 import { readFileIfExists, appendMarkdown } from "./files.js";
 import { generateChunk } from "./bookWriter.js";
+import { runInteractive } from "./interactive.js";
 
 type Args = {
   command?: string;
@@ -15,7 +16,14 @@ type Args = {
 };
 
 function parseArgs(argv: string[]): Args {
-  const command = argv[2];
+  let command: string | undefined = argv[2];
+  // Allow flags without an explicit command (e.g. `--help`).
+  // In that case we'll default to the interactive command later.
+  let startIndex = 3;
+  if (!command || command.startsWith("-")) {
+    command = undefined;
+    startIndex = 2;
+  }
   const args: Args = {
     command,
     section: "",
@@ -25,7 +33,7 @@ function parseArgs(argv: string[]): Args {
     draftPath: "book/draft.md",
   };
 
-  for (let i = 3; i < argv.length; i++) {
+  for (let i = startIndex; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--section") args.section = argv[++i] || "";
     else if (a === "--words") args.words = Number(argv[++i] || "800");
@@ -46,6 +54,7 @@ function printHelp(): void {
 Copilot Book Writer
 
 Commands:
+  start [--model gpt-5]
   write --section "Chapter 1" [--words 800] [--model gpt-5]
 
 Options:
@@ -60,15 +69,28 @@ Options:
 async function main() {
   const args = parseArgs(process.argv);
 
-  if (!args.command || args.command === "help") {
+  // Default command: start interactive session
+  if (!args.command) {
+    args.command = "start";
+  }
+
+  if (args.command === "help") {
     printHelp();
     process.exit(0);
   }
 
-  if (args.command !== "write") {
+  if (args.command !== "write" && args.command !== "start") {
     console.error(`Unknown command: ${args.command}`);
     printHelp();
     process.exit(1);
+  }
+
+  if (args.command === "start") {
+    await runInteractive({
+      repoRoot: process.cwd(),
+      model: args.model,
+    });
+    return;
   }
 
   if (!args.section.trim()) {

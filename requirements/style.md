@@ -8,12 +8,12 @@
 
 ## Pacing
 
-- 
+-
 
 ## Do / Don’t
 
 Do:
-- 
+-
 
 Don’t:
-- 
+-

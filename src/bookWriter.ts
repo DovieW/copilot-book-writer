@@ -1,5 +1,5 @@
 import { CopilotClient } from "@github/copilot-sdk";
-import { askUserTool } from "./tools/askUserTool.js";
+import { askQuestionsTool } from "./tools/askQuestionsTool.js";
 
 export type WriteChunkOptions = {
   model: string;
@@ -22,7 +22,7 @@ export async function generateChunk(options: WriteChunkOptions): Promise<string>
   try {
     const session = await client.createSession({
       model: options.model,
-      tools: [askUserTool],
+      tools: [askQuestionsTool],
       systemMessage: {
         content: `
 You are a careful book-writing assistant.
@@ -30,7 +30,7 @@ You are a careful book-writing assistant.
 Rules:
 - Write ONLY the next chunk for the requested section.
 - Stay consistent with the existing draft.
-- Follow the requirements. If requirements conflict or are missing, ask the user 1-4 targeted questions using the ask_user tool.
+- Follow the requirements. If requirements conflict or are missing, ask the user 1-4 targeted questions using the ask_questions tool.
 - Output should be clean Markdown prose (no meta commentary).
         `.trim(),
       },
@@ -49,7 +49,7 @@ ${options.requirementsMarkdown || "(none)"}
 ## Current draft
 ${options.currentDraft ? options.currentDraft : "(empty)"}
 
-Now write the next chunk for the target section. If you need clarifications, ask via the ask_user tool.
+Now write the next chunk for the target section. If you need clarifications, ask via the ask_questions tool.
 `.trim();
 
     const final = await session.sendAndWait({ prompt }, 10 * 60 * 1000);

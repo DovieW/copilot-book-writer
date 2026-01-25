@@ -26,6 +26,12 @@ Install deps:
 
 - `npm install`
 
+Start the interactive experience:
+
+- `npm start`
+
+It will ask you (via questions in the terminal) whether you want **easy mode** or **hard mode**, then guide you through filling out `requirements/` and writing the book paragraph-by-paragraph.
+
 Generate a first chunk:
 
 - `npm run write -- --section "Chapter 1" --words 800`
