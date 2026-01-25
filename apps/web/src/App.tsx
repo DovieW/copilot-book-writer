@@ -2,8 +2,11 @@ import * as React from "react";
 
 import type { ServerEvent } from "./api";
 import {
+  createBook,
   createSession,
+  getSessionInfo,
   listBookFiles,
+  listBooks,
   readBookFile,
   startSession,
   sendAnswers,
@@ -27,6 +30,13 @@ export function App() {
   const [mode, setMode] = React.useState<"easy" | "hard">("hard");
   const [hasStarted, setHasStarted] = React.useState(false);
 
+  const [books, setBooks] = React.useState<string[]>([]);
+  const [activeBookId, setActiveBookId] = React.useState<string>("default");
+  const [bookName, setBookName] = React.useState<string>("");
+  const [resume, setResume] = React.useState<
+    { sessionId: string; bookId: string } | undefined
+  >();
+
   const [pendingQuestions, setPendingQuestions] = React.useState<
     ServerEvent & { type: "ask_questions" }
   >();
@@ -38,9 +48,32 @@ export function App() {
   const [activeFile, setActiveFile] = React.useState<string | null>(null);
   const [activeFileContent, setActiveFileContent] = React.useState<string>("");
 
-  async function refreshBookList() {
+  const esRef = React.useRef<EventSource | null>(null);
+
+  function disconnectStream() {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+  }
+
+  function resetUiForBookSwitch(nextBookId: string) {
+    disconnectStream();
+    setSessionId(null);
+    setHasStarted(false);
+    setStatus("idle");
+    setChat([]);
+    setRollingOutput("");
+    setStreamBuffer("");
+    setPendingQuestions(undefined);
+    setActiveBookId(nextBookId);
+    setActiveFile(null);
+    setActiveFileContent("");
+  }
+
+  async function refreshBookList(bookId: string = activeBookId) {
     try {
-      const files = await listBookFiles();
+      const files = await listBookFiles(bookId);
       setBookFiles(files);
       if (!activeFile && files.length) setActiveFile(files[0]);
     } catch {
@@ -48,9 +81,9 @@ export function App() {
     }
   }
 
-  async function refreshActiveFile(name: string) {
+  async function refreshActiveFile(name: string, bookId: string = activeBookId) {
     try {
-      const content = await readBookFile(name);
+      const content = await readBookFile(bookId, name);
       setActiveFileContent(content);
     } catch (err: any) {
       setActiveFileContent(String(err?.message || err));
@@ -58,9 +91,94 @@ export function App() {
   }
 
   React.useEffect(() => {
-    // Do not create a Copilot session on page load.
-    return;
+    // Load known books + any last session so the user can resume after reload.
+    const raw = localStorage.getItem("cbw:lastSession");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed?.sessionId && parsed?.bookId) {
+          setResume({ sessionId: String(parsed.sessionId), bookId: String(parsed.bookId) });
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void (async () => {
+      try {
+        const b = await listBooks();
+        setBooks(b);
+        if (b.includes("default")) setActiveBookId("default");
+        else if (b.length) setActiveBookId(b[0]);
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      disconnectStream();
+    };
   }, []);
+
+  function connectStream(bookId: string, sessionId: string) {
+    disconnectStream();
+    const es = new EventSource(`/api/books/${bookId}/sessions/${sessionId}/events`);
+    esRef.current = es;
+
+    es.addEventListener("event", (e) => {
+      const data = JSON.parse((e as MessageEvent).data) as ServerEvent;
+
+      if (data.type === "status") {
+        setStatus(data.data.message);
+        return;
+      }
+
+      if (data.type === "error") {
+        setChat((prev) => [...prev, { role: "system", content: data.data.message }]);
+        return;
+      }
+
+      if (data.type === "ask_questions") {
+        setPendingQuestions(data as any);
+        return;
+      }
+
+      if (data.type === "assistant.delta") {
+        setStreamBuffer((prev) => prev + data.data.delta);
+        return;
+      }
+
+      if (data.type === "assistant.message") {
+        // Commit the streamed buffer if present; otherwise fall back to the final content.
+        setStreamBuffer((buf) => {
+          const chunk = buf.trim().length ? buf : data.data.content;
+          setRollingOutput((prev) => {
+            const next = prev + (prev.trim().length ? "\n\n" : "") + chunk.trim();
+            return next;
+          });
+          return "";
+        });
+        return;
+      }
+
+      if (data.type === "user.message") {
+        setChat((prev) => [...prev, { role: "user", content: data.data.content }]);
+        return;
+      }
+
+      if (data.type === "file.updated") {
+        refreshBookList(bookId);
+        if (activeFile && data.data.path === `books/${bookId}/book/${activeFile}`) {
+          refreshActiveFile(activeFile, bookId);
+        }
+        return;
+      }
+    });
+
+    es.onerror = () => {
+      setStatus("disconnected");
+    };
+  }
 
   async function handleStart() {
     if (hasStarted) return;
@@ -69,69 +187,37 @@ export function App() {
     setStatus("creating session...");
 
     try {
-      const { sessionId } = await createSession(mode);
-      setSessionId(sessionId);
+      const nameToUse = bookName.trim() || activeBookId || "default";
+
+      // Ensure the book folder exists (nice UX; server also slugifies/creates).
+      try {
+        await createBook(nameToUse);
+      } catch {
+        // ignore if it already exists
+      }
+
+      try {
+        setBooks(await listBooks());
+      } catch {
+        // ignore
+      }
+
+      const created = await createSession(mode, nameToUse);
+
+      setActiveBookId(created.bookId);
+      setSessionId(created.sessionId);
       setStatus("session created");
 
-      const es = new EventSource(`/api/sessions/${sessionId}/events`);
-      es.addEventListener("event", (e) => {
-        const data = JSON.parse((e as MessageEvent).data) as ServerEvent;
+      localStorage.setItem(
+        "cbw:lastSession",
+        JSON.stringify({ sessionId: created.sessionId, bookId: created.bookId }),
+      );
 
-        if (data.type === "status") {
-          setStatus(data.data.message);
-          return;
-        }
-
-        if (data.type === "error") {
-          setChat((prev) => [...prev, { role: "system", content: data.data.message }]);
-          return;
-        }
-
-        if (data.type === "ask_questions") {
-          setPendingQuestions(data as any);
-          return;
-        }
-
-        if (data.type === "assistant.delta") {
-          setStreamBuffer((prev) => prev + data.data.delta);
-          return;
-        }
-
-        if (data.type === "assistant.message") {
-          // Commit the streamed buffer if present; otherwise fall back to the final content.
-          setStreamBuffer((buf) => {
-            const chunk = buf.trim().length ? buf : data.data.content;
-            setRollingOutput((prev) => {
-              const next = prev + (prev.trim().length ? "\n\n" : "") + chunk.trim();
-              return next;
-            });
-            return "";
-          });
-          return;
-        }
-
-        if (data.type === "user.message") {
-          setChat((prev) => [...prev, { role: "user", content: data.data.content }]);
-          return;
-        }
-
-        if (data.type === "file.updated") {
-          refreshBookList();
-          if (activeFile && data.data.path === `book/${activeFile}`) {
-            refreshActiveFile(activeFile);
-          }
-          return;
-        }
-      });
-
-      es.onerror = () => {
-        setStatus("disconnected");
-      };
-
-      refreshBookList();
+      connectStream(created.bookId, created.sessionId);
+      await refreshBookList(created.bookId);
 
       // Now that the UI is connected and mode is deterministic, start Copilot.
-      await startSession(sessionId);
+      await startSession(created.sessionId);
       setStatus("running");
     } catch (err: any) {
       setStatus("failed");
@@ -140,11 +226,35 @@ export function App() {
     }
   }
 
+  async function handleResume() {
+    if (!resume) return;
+    resetUiForBookSwitch(resume.bookId);
+    setHasStarted(true);
+    setSessionId(resume.sessionId);
+    setStatus("resuming...");
+
+    try {
+      const info = await getSessionInfo(resume.sessionId);
+      setStatus(info.exists ? "connected" : "session_offline");
+    } catch {
+      setStatus("session_offline");
+    }
+
+    connectStream(resume.bookId, resume.sessionId);
+    await refreshBookList(resume.bookId);
+  }
+
   React.useEffect(() => {
     if (!activeFile) return;
-    refreshActiveFile(activeFile);
+    refreshActiveFile(activeFile, activeBookId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFile]);
+  }, [activeFile, activeBookId]);
+
+  React.useEffect(() => {
+    // When switching books, refresh the chapter list.
+    void refreshBookList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBookId]);
 
   async function handleSend() {
     if (!sessionId) return;
@@ -188,6 +298,49 @@ export function App() {
                   <div className="text-sm text-slate-300">
                     Choose a mode (deterministic) and then start Copilot.
                   </div>
+                  {resume ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-950/20 p-3">
+                      <div className="text-xs text-slate-400">
+                        Resume last session: <span className="text-slate-200">{resume.bookId}</span>
+                      </div>
+                      <Button type="button" variant="secondary" onClick={handleResume}>
+                        Resume
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-2">
+                    <div className="text-xs text-slate-400">Book</div>
+                    <div className="flex gap-2">
+                      <input
+                        className="h-9 flex-1 rounded-md border border-slate-700 bg-slate-950/40 px-3 text-sm"
+                        value={bookName}
+                        placeholder="Book name (e.g. My Cool Book)"
+                        onChange={(e) => setBookName(e.target.value)}
+                      />
+                      <select
+                        className="h-9 rounded-md border border-slate-700 bg-slate-950/40 px-2 text-sm"
+                        value={activeBookId}
+                        onChange={(e) => {
+                          setBookName("");
+                          setActiveBookId(e.target.value);
+                        }}
+                      >
+                        <option value="default">default</option>
+                        {books
+                          .filter((b) => b !== "default")
+                          .map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Tip: type a new name to create a new book; or pick an existing one.
+                    </div>
+                  </div>
+
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -286,7 +439,21 @@ export function App() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={refreshBookList} type="button">
+              <select
+                className="h-9 rounded-md border border-slate-700 bg-slate-950/40 px-2 text-sm"
+                value={activeBookId}
+                onChange={(e) => resetUiForBookSwitch(e.target.value)}
+              >
+                <option value="default">default</option>
+                {books
+                  .filter((b) => b !== "default")
+                  .map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+              </select>
+              <Button variant="secondary" onClick={() => refreshBookList()} type="button">
                 Refresh files
               </Button>
               <select
@@ -326,7 +493,9 @@ export function App() {
             </div>
             <div className="min-h-0 flex flex-col">
               <div className="p-3 text-xs text-slate-400 border-b border-slate-800">
-                {activeFile ? `book/${activeFile}` : "No chapter selected"}
+                {activeFile
+                  ? `books/${activeBookId}/book/${activeFile}`
+                  : "No chapter selected"}
               </div>
               <div className="flex-1 overflow-auto p-4">
                 <pre className="whitespace-pre-wrap text-sm leading-6">

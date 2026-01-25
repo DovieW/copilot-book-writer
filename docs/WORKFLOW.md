@@ -2,10 +2,10 @@
 
 This repo is designed around a simple loop:
 
-1. **Define requirements** in `requirements/*.md`
-2. **Generate the next chunk** into `book/draft.md`
+1. **Define requirements** in `books/<bookId>/requirements/*.md`
+2. **Generate the next chunk** into `books/<bookId>/book/draft.md`
 3. **Review + edit** the draft (you can edit the markdown directly)
-4. **Record feedback** in `requirements/feedback.md` (new constraints the next generation must follow)
+4. **Record feedback** in `books/<bookId>/requirements/feedback.md` (new constraints the next generation must follow)
 5. Repeat
 
 ## Requirements are the source of truth
@@ -50,4 +50,4 @@ If requirements are missing/unclear, the model will call a local tool to ask you
 During `npm start`, the tool writes one paragraph (or small chunk) at a time and then asks you if you like it.
 
 - If you say it needs changes, you provide feedback and it updates the book files.
-- If the feedback implies a new rule (tone, character detail, plot rule), it also updates `requirements/feedback.md` so future writing stays consistent.
+- If the feedback implies a new rule (tone, character detail, plot rule), it also updates `books/<bookId>/requirements/feedback.md` so future writing stays consistent.

@@ -22,12 +22,40 @@ export type ServerEvent =
 
 export type SessionMode = "easy" | "hard";
 
-export async function createSession(mode: SessionMode): Promise<{ sessionId: string }> {
+export async function listBooks(): Promise<string[]> {
+  const res = await fetch("/api/books");
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  return (json.books || []) as string[];
+}
+
+export async function createBook(name: string): Promise<{ bookId: string }> {
+  const res = await fetch("/api/books", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+export async function createSession(
+  mode: SessionMode,
+  bookName: string,
+): Promise<{ sessionId: string; bookId: string }> {
   const res = await fetch("/api/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify({ mode, bookName }),
   });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+export async function getSessionInfo(
+  sessionId: string,
+): Promise<{ exists: boolean; started?: boolean; bookId?: string }> {
+  const res = await fetch(`/api/sessions/${sessionId}`);
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
@@ -62,15 +90,17 @@ export async function sendAnswers(
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function listBookFiles(): Promise<string[]> {
-  const res = await fetch("/api/book/list");
+export async function listBookFiles(bookId: string): Promise<string[]> {
+  const res = await fetch(`/api/books/${encodeURIComponent(bookId)}/book/list`);
   if (!res.ok) throw new Error(await res.text());
   const json = await res.json();
   return json.files as string[];
 }
 
-export async function readBookFile(name: string): Promise<string> {
-  const res = await fetch(`/api/book/read?path=${encodeURIComponent(name)}`);
+export async function readBookFile(bookId: string, name: string): Promise<string> {
+  const res = await fetch(
+    `/api/books/${encodeURIComponent(bookId)}/book/read?path=${encodeURIComponent(name)}`,
+  );
   if (!res.ok) throw new Error(await res.text());
   const json = await res.json();
   return json.content as string;

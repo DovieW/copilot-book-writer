@@ -8,10 +8,10 @@ This repository builds a “book writing agent” using the GitHub Copilot SDK.
 
 ## Non-negotiables
 
-- **Requirements-first**: the book must be driven by files in `requirements/`. If something changes, update requirements so constraints remain accurate.
+- **Requirements-first**: each book must be driven by files in `books/<bookId>/requirements/`. If something changes, update requirements so constraints remain accurate.
 - **Incremental writing**: generate the book in small, reviewable chunks (chapter/scene/section/paragraph), never “one-shot” an entire full-length book.
-- **Human-in-the-loop**: the user can edit `book/draft.md` directly. The tooling should treat the draft as authoritative and help reconcile edits back into requirements.
-- **Traceability**: when requirements change, store a short rationale in `requirements/feedback.md` (what changed and why).
+- **Human-in-the-loop**: the user can edit `books/<bookId>/book/draft.md` directly. The tooling should treat the draft as authoritative and help reconcile edits back into requirements.
+- **Traceability**: when requirements change, store a short rationale in `books/<bookId>/requirements/feedback.md` (what changed and why).
 
 ## Workflow conventions
 
@@ -29,6 +29,6 @@ This repository builds a “book writing agent” using the GitHub Copilot SDK.
 
 ## Output conventions
 
-- Write output into `book/draft.md`.
+- Write output into `books/<bookId>/book/draft.md`.
 - Preserve the user’s existing text unless explicitly instructed to rewrite it.
 

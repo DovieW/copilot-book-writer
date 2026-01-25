@@ -5,19 +5,27 @@ import { z } from "zod";
 
 export type FileToolsOptions = {
   repoRoot: string;
+  allowedRoots?: {
+    requirementsDirAbs: string;
+    bookDirAbs: string;
+  };
   onFileUpdated?: (repoRelativePath: string) => void;
 };
 
-function resolveSafePath(repoRoot: string, requestedPath: string): string {
+function resolveSafePath(options: FileToolsOptions, requestedPath: string): string {
   const normalized = requestedPath.replace(/\\/g, "/");
   if (normalized.startsWith("/") || normalized.includes("..")) {
     throw new Error(`Unsafe path: ${requestedPath}`);
   }
 
-  const abs = path.resolve(repoRoot, normalized);
+  const abs = path.resolve(options.repoRoot, normalized);
   const allowedRoots = [
-    path.resolve(repoRoot, "requirements") + path.sep,
-    path.resolve(repoRoot, "book") + path.sep,
+    (options.allowedRoots?.requirementsDirAbs
+      ? path.resolve(options.allowedRoots.requirementsDirAbs)
+      : path.resolve(options.repoRoot, "requirements")) + path.sep,
+    (options.allowedRoots?.bookDirAbs
+      ? path.resolve(options.allowedRoots.bookDirAbs)
+      : path.resolve(options.repoRoot, "book")) + path.sep,
   ];
 
   const absWithSep = abs.endsWith(path.sep) ? abs : abs + path.sep;
@@ -40,7 +48,7 @@ export function createFileToolsWithEvents(options: FileToolsOptions) {
       path: z.string().describe("Repo-relative path, e.g. requirements/project.md"),
     }),
     handler: async ({ path: p }) => {
-      const abs = resolveSafePath(options.repoRoot, p);
+      const abs = resolveSafePath(options, p);
       const content = await fs.readFile(abs, "utf8");
       return { content };
     },
@@ -54,7 +62,7 @@ export function createFileToolsWithEvents(options: FileToolsOptions) {
       content: z.string().describe("Full file contents"),
     }),
     handler: async ({ path: p, content }) => {
-      const abs = resolveSafePath(options.repoRoot, p);
+      const abs = resolveSafePath(options, p);
       await fs.mkdir(path.dirname(abs), { recursive: true });
       await fs.writeFile(abs, content, "utf8");
       options.onFileUpdated?.(toRepoRelative(options.repoRoot, abs));
@@ -70,7 +78,7 @@ export function createFileToolsWithEvents(options: FileToolsOptions) {
       content: z.string().describe("Content to append"),
     }),
     handler: async ({ path: p, content }) => {
-      const abs = resolveSafePath(options.repoRoot, p);
+      const abs = resolveSafePath(options, p);
       await fs.mkdir(path.dirname(abs), { recursive: true });
       await fs.appendFile(abs, content, "utf8");
       options.onFileUpdated?.(toRepoRelative(options.repoRoot, abs));
@@ -85,7 +93,7 @@ export function createFileToolsWithEvents(options: FileToolsOptions) {
       dir: z.string().describe("Repo-relative directory path"),
     }),
     handler: async ({ dir }) => {
-      const abs = resolveSafePath(options.repoRoot, dir);
+      const abs = resolveSafePath(options, dir);
       const entries = await fs.readdir(abs, { withFileTypes: true });
       return {
         entries: entries.map((e) => ({

@@ -5,9 +5,11 @@ import { loadRequirementsMarkdown } from "./requirements.js";
 import { readFileIfExists, appendMarkdown } from "./files.js";
 import { generateChunk } from "./bookWriter.js";
 import { runInteractive } from "./interactive.js";
+import { ensureBooksRoot, migrateLegacySingleBook } from "./legacyMigration.js";
 
 type Args = {
   command?: string;
+  book: string;
   section: string;
   words: number;
   model: string;
@@ -26,11 +28,12 @@ function parseArgs(argv: string[]): Args {
   }
   const args: Args = {
     command,
+    book: "default",
     section: "",
     words: 800,
     model: process.env.COPILOT_MODEL || "gpt-5-mini",
-    requirementsDir: "requirements",
-    draftPath: "book/draft.md",
+    requirementsDir: "books/default/requirements",
+    draftPath: "books/default/book/draft.md",
   };
 
   for (let i = startIndex; i < argv.length; i++) {
@@ -38,11 +41,20 @@ function parseArgs(argv: string[]): Args {
     if (a === "--section") args.section = argv[++i] || "";
     else if (a === "--words") args.words = Number(argv[++i] || "800");
     else if (a === "--model") args.model = argv[++i] || args.model;
+    else if (a === "--book") args.book = argv[++i] || args.book;
     else if (a === "--requirements") args.requirementsDir = argv[++i] || args.requirementsDir;
     else if (a === "--draft") args.draftPath = argv[++i] || args.draftPath;
     else if (a === "--help" || a === "-h") {
       args.command = "help";
     }
+  }
+
+  // If the user provided --book and didn't override paths, point at that book.
+  if (args.book && args.requirementsDir === "books/default/requirements") {
+    args.requirementsDir = `books/${args.book}/requirements`;
+  }
+  if (args.book && args.draftPath === "books/default/book/draft.md") {
+    args.draftPath = `books/${args.book}/book/draft.md`;
   }
 
   return args;
@@ -58,16 +70,21 @@ Commands:
   write --section "Chapter 1" [--words 800] [--model gpt-5]
 
 Options:
+  --book          Book folder id (default: default)
   --section       Which section you want to write next (required)
   --words         Approx target word count (default: 800)
   --model         Copilot model (default: gpt-5)
-  --requirements  Requirements directory (default: requirements)
-  --draft         Draft file path (default: book/draft.md)
+  --requirements  Requirements directory (default: books/<book>/requirements)
+  --draft         Draft file path (default: books/<book>/book/draft.md)
 `);
 }
 
 async function main() {
   const args = parseArgs(process.argv);
+
+  // If this repo was created before multi-book support, migrate book/ + requirements/.
+  await ensureBooksRoot(process.cwd());
+  await migrateLegacySingleBook(process.cwd(), "default");
 
   // Default command: start interactive session
   if (!args.command) {
@@ -89,6 +106,7 @@ async function main() {
     await runInteractive({
       repoRoot: process.cwd(),
       model: args.model,
+      bookId: args.book,
     });
     return;
   }

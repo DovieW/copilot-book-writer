@@ -10,8 +10,8 @@ The core idea:
 
 ## Repo layout
 
-- `requirements/` — The source of truth (constraints, outline, style, etc.)
-- `book/` — The current draft output
+- `books/<bookId>/requirements/` — The source of truth (constraints, outline, style, etc.)
+- `books/<bookId>/book/` — The current draft output
 - `docs/` — How the workflow works, conventions, and future ideas
 - `src/` — A small Node/TypeScript CLI that talks to Copilot via `@github/copilot-sdk`
 
@@ -30,7 +30,7 @@ Start the interactive experience:
 
 - `npm start`
 
-It will ask you (via questions in the terminal) whether you want **easy mode** or **hard mode**, then guide you through filling out `requirements/` and writing the book paragraph-by-paragraph.
+It will ask you (via questions in the terminal) whether you want **easy mode** or **hard mode** and the **book name**, then guide you through filling out that book’s `books/<bookId>/requirements/` and writing paragraph-by-paragraph.
 
 Generate a first chunk:
 
@@ -56,11 +56,11 @@ This starts:
 - the backend server on `http://localhost:8787`
 - the frontend on `http://localhost:5174`
 
-The draft is written to `book/draft.md`.
+The default draft is written to `books/<bookId>/book/draft.md`.
 
 ## How to use (simple explanation)
 
-Think of `requirements/*.md` as “rules for the book”. The generator reads those rules and your existing draft, then writes the next piece. If you change the draft later, you can capture new constraints in `requirements/feedback.md` so future generations don’t “forget” what you changed.
+Think of `books/<bookId>/requirements/*.md` as “rules for the book”. The generator reads those rules and your existing draft, then writes the next piece. If you change the draft later, you can capture new constraints in `books/<bookId>/requirements/feedback.md` so future generations don’t “forget” what you changed.
 
 ## License
 

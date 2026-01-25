@@ -6,7 +6,7 @@ This repo exists to create full-length books **incrementally** using the GitHub 
 
 ### 1) Requirements-first
 
-- `requirements/` is the source of truth.
+- `books/<bookId>/requirements/` is the source of truth.
 - If the draft changes in a way that affects future consistency, capture it as a requirement (usually in `requirements/feedback.md`).
 
 ### 2) Small, reviewable chunks
@@ -16,7 +16,7 @@ This repo exists to create full-length books **incrementally** using the GitHub 
 
 ### 3) Human-in-the-loop, always
 
-- The user can directly edit `book/draft.md`.
+- The user can directly edit `books/<bookId>/book/draft.md`.
 - Tooling must preserve user edits unless explicitly instructed to rewrite.
 
 ### 4) Ask when uncertain
@@ -26,7 +26,7 @@ This repo exists to create full-length books **incrementally** using the GitHub 
 
 ## Workflow
 
-1. Fill in `requirements/*.md`
+1. Fill in `books/<bookId>/requirements/*.md`
 2. Run the generator to write the next chunk
 3. Review/edit the draft
 4. Add feedback constraints to requirements

@@ -1,12 +1,15 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 
 import { CopilotClient } from "@github/copilot-sdk";
 import { askQuestionsTool } from "./tools/askQuestionsTool.js";
 import { createFileTools } from "./tools/fileTools.js";
+import { getBookLayout, slugifyBookName } from "./bookLayout.js";
 
 export type InteractiveOptions = {
   repoRoot: string;
   model: string;
+  bookId?: string;
 };
 
 type Mode = "easy" | "hard";
@@ -21,6 +24,12 @@ function parseMode(text: string | undefined): Mode {
   }
   // Default to hard to avoid accidental over-assumption.
   return "hard";
+}
+
+function parseBook(text: string | undefined): string {
+  const t = (text || "").trim();
+  const m = t.match(/BOOK\s*=\s*(.+)/i);
+  return (m?.[1] || "").trim();
 }
 
 export async function runInteractive(options: InteractiveOptions): Promise<void> {
@@ -47,10 +56,13 @@ You MUST call the tool ask_questions first and ask:
 - question: "Do you want easy mode or hard mode?"
 - options: Easy mode (make more assumptions) vs Hard mode (ask more questions)
 
-After the user answers, respond with EXACTLY one line:
-MODE=easy
-or
-MODE=hard
+AND also ask:
+- header: book
+- question: "What is the book name? (Leave blank for default)"
+
+After the user answers, respond with EXACTLY two lines:
+MODE=easy|hard
+BOOK=<book name>
         `.trim(),
       },
     });
@@ -60,10 +72,24 @@ MODE=hard
     });
 
     const mode = parseMode(bootstrapResp?.data?.content);
+
+    const rawBookName = parseBook(bootstrapResp?.data?.content);
+    const bookId = slugifyBookName(rawBookName || options.bookId || "default");
+
     await bootstrap.destroy();
 
     // 2) Main interactive session: requirements -> write -> review loop.
-    const fileTools = createFileTools({ repoRoot: options.repoRoot });
+    const layout = getBookLayout(options.repoRoot, bookId);
+    await fs.mkdir(layout.requirementsDir, { recursive: true });
+    await fs.mkdir(layout.draftDir, { recursive: true });
+
+    const fileTools = createFileTools({
+      repoRoot: options.repoRoot,
+      allowedRoots: {
+        requirementsDirAbs: layout.requirementsDir,
+        bookDirAbs: layout.draftDir,
+      },
+    });
 
     const modeGuidance =
       mode === "easy"
@@ -71,7 +97,7 @@ MODE=hard
 EASY MODE:
 - Make reasonable assumptions when requirements are incomplete.
 - Ask fewer questions; only ask when blocked.
-- When you assume something important, write it back into requirements/feedback.md.
+- When you assume something important, write it back into books/${bookId}/requirements/feedback.md.
           `.trim()
         : `
 HARD MODE:
@@ -88,8 +114,8 @@ HARD MODE:
 You are Copilot Book Writer running inside a terminal CLI.
 
 Your job:
-1) Help the user fill out requirements files in requirements/.
-2) When ready, write the book chapter-by-chapter and paragraph-by-paragraph into book/.
+1) Help the user fill out requirements files in books/${layout.bookId}/requirements/.
+2) When ready, write the book chapter-by-chapter and paragraph-by-paragraph into books/${layout.bookId}/book/.
 3) After each paragraph (or small chunk), ask the user if they like it.
 4) If the user requests changes, apply them by editing the book files AND update requirements so constraints stay in sync.
 
@@ -113,9 +139,10 @@ Stop condition:
 We are starting an interactive book-writing session.
 
 Repository root: ${repoRel(options.repoRoot)}
+  Book: ${layout.bookId}
 
 First:
-- Review the existing files under requirements/ (use list_files + read_text_file).
+  - Review the existing files under books/${layout.bookId}/requirements/ (use list_files + read_text_file).
 - Ask the user whatever you need to fully define the book.
 - Write updates into the requirements files.
 
@@ -123,7 +150,7 @@ Then:
 - Ask: "Are we ready to start writing?" (Yes / Not yet / Stop)
 
 When ready:
-- Create book/chapter-01.md if it does not exist.
+- Create books/${layout.bookId}/book/chapter-01.md if it does not exist.
 - Write ONE paragraph for Chapter 1.
 - Ask the user if they like it (Looks good / Needs changes / Stop).
 - If needs changes, ask for feedback and apply changes.
