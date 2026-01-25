@@ -98,8 +98,6 @@ export function App() {
         }
 
         if (data.type === "assistant.message") {
-          setChat((prev) => [...prev, { role: "assistant", content: data.data.content }]);
-
           // Commit the streamed buffer if present; otherwise fall back to the final content.
           setStreamBuffer((buf) => {
             const chunk = buf.trim().length ? buf : data.data.content;
@@ -222,29 +220,31 @@ export function App() {
               />
             ) : null}
 
-            {chat.map((m, idx) => (
-              <Card
-                key={idx}
-                className={
-                  m.role === "user"
-                    ? "border-slate-700 bg-slate-900/30"
-                    : m.role === "assistant"
-                      ? "border-slate-800 bg-slate-950/30"
-                      : "border-red-900/40 bg-red-950/20"
-                }
-              >
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="capitalize">{m.role}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <pre className="whitespace-pre-wrap text-sm leading-6">
-                    {m.content}
-                  </pre>
-                </CardContent>
-              </Card>
-            ))}
+            {chat
+              .filter((m) => m.content.trim().length > 0)
+              .map((m, idx) => (
+                <Card
+                  key={idx}
+                  className={
+                    m.role === "user"
+                      ? "border-slate-700 bg-slate-900/30"
+                      : m.role === "assistant"
+                        ? "border-slate-800 bg-slate-950/30"
+                        : "border-red-900/40 bg-red-950/20"
+                  }
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="capitalize">{m.role}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <pre className="whitespace-pre-wrap text-sm leading-6">
+                      {m.content}
+                    </pre>
+                  </CardContent>
+                </Card>
+              ))}
           </div>
 
           <Separator />
@@ -272,9 +272,6 @@ export function App() {
               <Button type="button" onClick={handleSend} disabled={isSending || !sessionId}>
                 Send
               </Button>
-            </div>
-            <div className="text-xs text-slate-500">
-              Tip: Ctrl+Enter / Cmd+Enter to send.
             </div>
           </div>
         </div>
