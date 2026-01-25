@@ -42,7 +42,8 @@ export const askQuestionsTool = defineTool("ask_questions", {
 
         if (q.options?.length) {
           q.options.forEach((opt, idx) => {
-            const rec = opt.recommended ? " (recommended)" : "";
+            // Intentionally ignore `recommended` so we don't bias the user's choice.
+            const rec = "";
             const desc = opt.description ? ` — ${opt.description}` : "";
             output.write(`  ${idx + 1}) ${opt.label}${rec}${desc}\n`);
           });
