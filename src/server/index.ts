@@ -61,6 +61,44 @@ async function listBooks(): Promise<string[]> {
     .sort();
 }
 
+type SessionMeta = {
+  sessionId: string;
+  bookId: string;
+  createdAt: string;
+  mode?: string;
+  model?: string;
+  continuedFromSessionId?: string | null;
+};
+
+async function listSessionsForBook(bookId: string): Promise<SessionMeta[]> {
+  const fs = await import("node:fs/promises");
+  const layout = getBookLayout(repoRoot, bookId);
+  await fs.mkdir(layout.sessionsDir, { recursive: true });
+  const entries = await fs.readdir(layout.sessionsDir, { withFileTypes: true });
+
+  const metas = entries
+    .filter((e) => e.isFile() && e.name.endsWith(".meta.json"))
+    .map((e) => e.name)
+    .sort();
+
+  const out: SessionMeta[] = [];
+  for (const name of metas) {
+    try {
+      const raw = await fs.readFile(path.resolve(layout.sessionsDir, name), "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed?.sessionId && parsed?.createdAt) {
+        out.push(parsed as SessionMeta);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // newest first
+  out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return out;
+}
+
 app.get("/api/books", async (_req, res) => {
   try {
     res.json({ books: await listBooks() });
@@ -83,6 +121,26 @@ app.post("/api/books", async (req, res) => {
     await fs.mkdir(layout.draftDir, { recursive: true });
     await fs.mkdir(layout.sessionsDir, { recursive: true });
     res.json({ bookId });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+app.get("/api/books/:bookId/sessions", async (req, res) => {
+  try {
+    const bookId = String(req.params.bookId || "").trim();
+    res.json({ sessions: await listSessionsForBook(bookId) });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+app.post("/api/books/:bookId/sessions/:id/continue", async (req, res) => {
+  try {
+    const bookId = String(req.params.bookId || "").trim();
+    const fromSessionId = String(req.params.id || "").trim();
+    const created = await manager.continueSession(bookId, fromSessionId);
+    res.json(created);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || String(err) });
   }

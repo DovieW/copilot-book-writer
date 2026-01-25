@@ -18,11 +18,15 @@ type PendingAsk = {
 type SessionState = {
   id: string;
   bookId: string;
+  mode: SessionMode;
+  model: string;
+  continuedFromSessionId?: string;
   session: CopilotSession;
   subscribers: Set<Subscriber>;
   pendingAsk?: PendingAsk;
   started?: boolean;
   eventLogPath: string;
+  metaPath: string;
 };
 
 export type SessionMode = "easy" | "hard";
@@ -92,6 +96,7 @@ export class SessionManager {
     mode: SessionMode,
     bookId: string,
     model?: string,
+    continuedFromSessionId?: string,
   ): Promise<{ sessionId: string; bookId: string }> {
     const id = crypto.randomUUID();
 
@@ -168,8 +173,10 @@ Tools:
 Never include meta commentary; keep responses user-facing.
     `.trim();
 
+    const chosenModel = model || this.modelDefault;
+
     const session = await this.client.createSession({
-      model: model || this.modelDefault,
+      model: chosenModel,
       streaming: true,
       tools: [askQuestionsTool, ...fileTools],
       systemMessage: { content: systemMessage },
@@ -178,13 +185,39 @@ Never include meta commentary; keep responses user-facing.
     const state: SessionState = {
       id,
       bookId: layout.bookId,
+      mode,
+      model: chosenModel,
+      continuedFromSessionId,
       session,
       subscribers: new Set(),
       started: false,
       eventLogPath: path.resolve(layout.sessionsDir, `${id}.jsonl`),
+      metaPath: path.resolve(layout.sessionsDir, `${id}.meta.json`),
     };
 
     this.sessions.set(id, state);
+
+    // Persist small metadata so we can list/continue sessions even after reload.
+    try {
+      await fs.writeFile(
+        state.metaPath,
+        JSON.stringify(
+          {
+            sessionId: state.id,
+            bookId: state.bookId,
+            createdAt: new Date().toISOString(),
+            mode: state.mode,
+            model: state.model,
+            continuedFromSessionId: state.continuedFromSessionId || null,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    } catch {
+      // ignore
+    }
 
     session.on((event: any) => {
       try {
@@ -214,15 +247,94 @@ Never include meta commentary; keep responses user-facing.
     return { sessionId: id, bookId: layout.bookId };
   }
 
+  async continueSession(
+    bookId: string,
+    fromSessionId: string,
+  ): Promise<{ sessionId: string; bookId: string }> {
+    const layout = getBookLayout(this.repoRoot, bookId);
+    const metaPath = path.resolve(layout.sessionsDir, `${fromSessionId}.meta.json`);
+    let mode: SessionMode = "hard";
+    let model: string | undefined;
+
+    try {
+      const raw = await fs.readFile(metaPath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed?.mode === "easy" || parsed?.mode === "hard") mode = parsed.mode;
+      if (typeof parsed?.model === "string" && parsed.model.trim()) model = parsed.model;
+    } catch {
+      // fall back to defaults
+    }
+
+    return await this.createSession(mode, bookId, model, fromSessionId);
+  }
+
+  async getBookContext(bookId: string): Promise<{ requirements: string; book: string }> {
+    const layout = getBookLayout(this.repoRoot, bookId);
+
+    const readAllFiles = async (dirAbs: string, prefix: string) => {
+      try {
+        const entries = await fs.readdir(dirAbs, { withFileTypes: true });
+        const files = entries
+          .filter((e) => e.isFile())
+          .map((e) => e.name)
+          .filter((n) => n.endsWith(".md") || n.endsWith(".txt"))
+          .sort();
+        const parts: string[] = [];
+        for (const f of files) {
+          const abs = path.resolve(dirAbs, f);
+          const content = await fs.readFile(abs, "utf8");
+          parts.push(`\n\n---\n\n# ${prefix}/${f}\n\n${content.trim()}\n`);
+        }
+        return parts.join("");
+      } catch {
+        return "";
+      }
+    };
+
+    return {
+      requirements: await readAllFiles(layout.requirementsDir, `books/${layout.bookId}/requirements`),
+      book: await readAllFiles(layout.draftDir, `books/${layout.bookId}/book`),
+    };
+  }
+
+  async getSessionLogText(bookId: string, sessionId: string): Promise<string> {
+    const layout = getBookLayout(this.repoRoot, bookId);
+    const logPath = path.resolve(layout.sessionsDir, `${sessionId}.jsonl`);
+    try {
+      const raw = await fs.readFile(logPath, "utf8");
+      // For now: keep it simple and return the raw log. Later we can summarize.
+      return raw.trim();
+    } catch {
+      return "";
+    }
+  }
+
   async startSession(id: string): Promise<void> {
     const s = this.sessions.get(id);
     if (!s) throw new Error("Unknown session");
     if (s.started) return;
 
     s.started = true;
+
+    const context = await this.getBookContext(s.bookId);
+    const priorLog = s.continuedFromSessionId
+      ? await this.getSessionLogText(s.bookId, s.continuedFromSessionId)
+      : "";
+
     await s.session.send({
       prompt: `
 Start an interactive book-writing session.
+
+Context for this book (use this as your working memory):
+
+## Requirements (books/${s.bookId}/requirements/*)
+${context.requirements || "(no requirements yet)"}
+
+## Book so far (books/${s.bookId}/book/*)
+${context.book || "(no book text yet)"}
+
+## Prior session log (if continuing)
+${priorLog || "(none)"}
 
 First:
 - Review the existing files under books/${s.bookId}/requirements/.

@@ -2,11 +2,13 @@ import * as React from "react";
 
 import type { ServerEvent } from "./api";
 import {
+  continueSession,
   createBook,
   createSession,
   getSessionInfo,
   listBookFiles,
   listBooks,
+  listSessions,
   readBookFile,
   startSession,
   sendAnswers,
@@ -47,6 +49,10 @@ export function App() {
   const [bookFiles, setBookFiles] = React.useState<string[]>([]);
   const [activeFile, setActiveFile] = React.useState<string | null>(null);
   const [activeFileContent, setActiveFileContent] = React.useState<string>("");
+
+  const [sessions, setSessions] = React.useState<
+    Array<{ sessionId: string; createdAt: string; continuedFromSessionId?: string | null }>
+  >([]);
 
   const esRef = React.useRef<EventSource | null>(null);
 
@@ -253,8 +259,58 @@ export function App() {
   React.useEffect(() => {
     // When switching books, refresh the chapter list.
     void refreshBookList();
+    void (async () => {
+      try {
+        const s = await listSessions(activeBookId);
+        setSessions(
+          s.map((x) => ({
+            sessionId: x.sessionId,
+            createdAt: x.createdAt,
+            continuedFromSessionId: x.continuedFromSessionId,
+          })),
+        );
+      } catch {
+        setSessions([]);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBookId]);
+
+  async function handleViewSession(bookId: string, sessionId: string) {
+    resetUiForBookSwitch(bookId);
+    setHasStarted(true);
+    setSessionId(sessionId);
+    setStatus("connected");
+    connectStream(bookId, sessionId);
+    await refreshBookList(bookId);
+  }
+
+  async function handleContinueFrom(bookId: string, fromSessionId: string) {
+    setStatus("continuing...");
+    const created = await continueSession(bookId, fromSessionId);
+    localStorage.setItem(
+      "cbw:lastSession",
+      JSON.stringify({ sessionId: created.sessionId, bookId: created.bookId }),
+    );
+    setResume({ sessionId: created.sessionId, bookId: created.bookId });
+    setSessionId(created.sessionId);
+    setHasStarted(true);
+    connectStream(created.bookId, created.sessionId);
+    await refreshBookList(created.bookId);
+    await startSession(created.sessionId);
+    try {
+      setSessions(
+        (await listSessions(created.bookId)).map((x) => ({
+          sessionId: x.sessionId,
+          createdAt: x.createdAt,
+          continuedFromSessionId: x.continuedFromSessionId,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+    setStatus("running");
+  }
 
   async function handleSend() {
     if (!sessionId) return;
@@ -340,6 +396,50 @@ export function App() {
                       Tip: type a new name to create a new book; or pick an existing one.
                     </div>
                   </div>
+
+                  {sessions.length ? (
+                    <div className="space-y-2">
+                      <div className="text-xs text-slate-400">Recent sessions</div>
+                      <div className="space-y-2">
+                        {sessions.slice(0, 6).map((s) => (
+                          <div
+                            key={s.sessionId}
+                            className="flex items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-950/20 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-xs text-slate-200">
+                                {s.sessionId}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {new Date(s.createdAt).toLocaleString()}
+                                {s.continuedFromSessionId
+                                  ? ` • continued from ${s.continuedFromSessionId.slice(0, 8)}…`
+                                  : ""}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => handleViewSession(activeBookId, s.sessionId)}
+                              >
+                                View
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => handleContinueFrom(activeBookId, s.sessionId)}
+                              >
+                                Continue
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        “View” replays the saved transcript. “Continue” creates a new live session from that point.
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="flex gap-2">
                     <Button

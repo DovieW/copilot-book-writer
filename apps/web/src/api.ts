@@ -39,6 +39,38 @@ export async function createBook(name: string): Promise<{ bookId: string }> {
   return await res.json();
 }
 
+export type SessionMeta = {
+  sessionId: string;
+  bookId: string;
+  createdAt: string;
+  mode?: string;
+  model?: string;
+  continuedFromSessionId?: string | null;
+};
+
+export async function listSessions(bookId: string): Promise<SessionMeta[]> {
+  const res = await fetch(`/api/books/${encodeURIComponent(bookId)}/sessions`);
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  return (json.sessions || []) as SessionMeta[];
+}
+
+export async function continueSession(
+  bookId: string,
+  fromSessionId: string,
+): Promise<{ sessionId: string; bookId: string }> {
+  const res = await fetch(
+    `/api/books/${encodeURIComponent(bookId)}/sessions/${encodeURIComponent(fromSessionId)}/continue`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    },
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
 export async function createSession(
   mode: SessionMode,
   bookName: string,
