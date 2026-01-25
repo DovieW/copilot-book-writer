@@ -54,7 +54,7 @@ Run it locally:
 This starts:
 
 - the backend server on `http://localhost:8787`
-- the frontend on `http://localhost:5173`
+- the frontend on `http://localhost:5174`
 
 The draft is written to `book/draft.md`.
 
