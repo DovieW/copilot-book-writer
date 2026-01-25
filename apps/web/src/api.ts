@@ -20,14 +20,25 @@ export type ServerEvent =
   | { type: "file.updated"; data: { path: string } }
   | { type: "error"; data: { message: string } };
 
-export async function createSession(): Promise<{ sessionId: string }> {
+export type SessionMode = "easy" | "hard";
+
+export async function createSession(mode: SessionMode): Promise<{ sessionId: string }> {
   const res = await fetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+export async function startSession(sessionId: string): Promise<void> {
+  const res = await fetch(`/api/sessions/${sessionId}/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
   });
   if (!res.ok) throw new Error(await res.text());
-  return await res.json();
 }
 
 export async function sendMessage(sessionId: string, prompt: string): Promise<void> {

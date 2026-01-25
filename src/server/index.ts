@@ -44,9 +44,25 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/sessions", async (req, res) => {
   try {
+    const modeRaw = typeof req.body?.mode === "string" ? req.body.mode : "";
+    const mode = modeRaw === "easy" || modeRaw === "hard" ? modeRaw : undefined;
+    if (!mode) {
+      res.status(400).json({ error: "mode must be 'easy' or 'hard'" });
+      return;
+    }
     const model = typeof req.body?.model === "string" ? req.body.model : undefined;
-    const { sessionId } = await manager.createSession(model);
+    const { sessionId } = await manager.createSession(mode, model);
     res.json({ sessionId });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+app.post("/api/sessions/:id/start", async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    await manager.startSession(sessionId);
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || String(err) });
   }

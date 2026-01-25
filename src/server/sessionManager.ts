@@ -17,7 +17,10 @@ type SessionState = {
   session: CopilotSession;
   subscribers: Set<Subscriber>;
   pendingAsk?: PendingAsk;
+  started?: boolean;
 };
+
+export type SessionMode = "easy" | "hard";
 
 export type SessionManagerOptions = {
   repoRoot: string;
@@ -66,7 +69,7 @@ export class SessionManager {
     return () => s.subscribers.delete(sub);
   }
 
-  async createSession(model?: string): Promise<{ sessionId: string }>
+  async createSession(mode: SessionMode, model?: string): Promise<{ sessionId: string }>
   {
     const id = crypto.randomUUID();
 
@@ -96,6 +99,20 @@ export class SessionManager {
       onFileUpdated: (p) => this.emit(id, { type: "file.updated", data: { path: p } }),
     });
 
+    const modeGuidance =
+      mode === "easy"
+        ? `
+EASY MODE:
+- Make reasonable assumptions when requirements are incomplete.
+- Ask fewer questions.
+- When you assume something important, record it in requirements/feedback.md.
+          `.trim()
+        : `
+HARD MODE:
+- Ask more questions up-front.
+- Prefer explicit requirements before writing prose.
+          `.trim();
+
     const systemMessage = `
 You are Copilot Book Writer running inside a web UI.
 
@@ -104,23 +121,14 @@ The UI has:
 - a live chapter view (right)
 
 Rules (non-negotiable):
-- The FIRST thing you do is call the tool ask_questions and ask:
-  - header: mode
-  - question: "Do you want easy mode or hard mode?"
-  - options: "Easy mode" (make more assumptions) and "Hard mode" (ask more questions)
 - After the mode is chosen, guide the user to fill requirements in requirements/*.md.
 - When ready, write chapter files under book/ (e.g. book/chapter-01.md) paragraph-by-paragraph.
 - After each paragraph (or small chunk), ask if the user likes it.
 - If the user requests changes, apply them and update requirements/feedback.md when the change becomes a new constraint.
 
-Easy mode behavior:
-- Make reasonable assumptions when requirements are incomplete.
-- Ask fewer questions.
-- When you assume something important, record it in requirements/feedback.md.
+Mode selected by the user (deterministic): ${mode}
 
-Hard mode behavior:
-- Ask more questions up-front.
-- Prefer explicit requirements before writing prose.
+${modeGuidance}
 
 Tools:
 - ask_questions (ask the user questions)
@@ -140,6 +148,7 @@ Never include meta commentary; keep responses user-facing.
       id,
       session,
       subscribers: new Set(),
+      started: false,
     };
 
     this.sessions.set(id, state);
@@ -167,12 +176,38 @@ Never include meta commentary; keep responses user-facing.
       }
     });
 
-    // Kick off onboarding. This should trigger ask_questions for mode.
-    await session.send({ prompt: "Start.", mode: "enqueue" });
-
     this.emit(id, { type: "status", data: { message: "session_created" } });
 
     return { sessionId: id };
+  }
+
+  async startSession(id: string): Promise<void> {
+    const s = this.sessions.get(id);
+    if (!s) throw new Error("Unknown session");
+    if (s.started) return;
+
+    s.started = true;
+    await s.session.send({
+      prompt: `
+Start an interactive book-writing session.
+
+First:
+- Review the existing files under requirements/.
+- Ask the user targeted questions to fill gaps.
+- Write updates into requirements/*.md.
+
+Then:
+- Ask: "Are we ready to start writing?" (Yes / Not yet / Stop)
+
+When ready:
+- Create book/chapter-01.md if it does not exist.
+- Write ONE paragraph for Chapter 1.
+- Ask the user if they like it (Looks good / Needs changes / Stop).
+- If needs changes, ask for feedback and apply changes.
+- Continue paragraph-by-paragraph.
+      `.trim(),
+      mode: "enqueue",
+    });
   }
 
   async sendMessage(id: string, prompt: string): Promise<void> {
