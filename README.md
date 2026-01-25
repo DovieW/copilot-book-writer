@@ -36,6 +36,8 @@ Generate a first chunk:
 
 - `npm run write -- --section "Chapter 1" --words 800`
 
+By default it uses the model `gpt-5-mini`. You can override with `--model` or `COPILOT_MODEL`.
+
 The draft is written to `book/draft.md`.
 
 ## How to use (simple explanation)

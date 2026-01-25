@@ -28,7 +28,7 @@ function parseArgs(argv: string[]): Args {
     command,
     section: "",
     words: 800,
-    model: process.env.COPILOT_MODEL || "gpt-5",
+    model: process.env.COPILOT_MODEL || "gpt-5-mini",
     requirementsDir: "requirements",
     draftPath: "book/draft.md",
   };

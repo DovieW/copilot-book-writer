@@ -29,6 +29,8 @@ Typical usage:
 - Interactive session (recommended): `npm start`
 - Generate a chunk (non-interactive): `npm run write -- --section "Chapter 1" --words 800`
 
+Default model: `gpt-5-mini` (override with `--model` or `COPILOT_MODEL`).
+
 If requirements are missing/unclear, the model will call a local tool to ask you questions in the terminal.
 
 ## Review loop
