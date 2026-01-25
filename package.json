@@ -1,0 +1,23 @@
+{
+  "name": "copilot-book-writer",
+  "private": true,
+  "type": "module",
+  "description": "Create full-length books incrementally using the GitHub Copilot SDK",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "write": "tsx src/cli.ts write",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "^0.1.8",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.6",
+    "tsx": "^4.20.6",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
