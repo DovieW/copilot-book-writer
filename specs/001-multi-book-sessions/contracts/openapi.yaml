@@ -1,0 +1,288 @@
+openapi: 3.0.3
+info:
+  title: Copilot Book Writer - Multi-book Sessions API
+  version: 0.1.0
+  description: |
+    API contract for multi-book selection, session history, viewing session transcripts, and continuing work.
+
+servers:
+  - url: http://localhost:5175
+    description: Local server (example)
+
+tags:
+  - name: Books
+  - name: Sessions
+  - name: BookFiles
+
+paths:
+  /api/books:
+    get:
+      tags: [Books]
+      summary: List books
+      responses:
+        '200':
+          description: List of books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+    post:
+      tags: [Books]
+      summary: Create a new book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Display name for the new book
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          description: Invalid book name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/books/{bookId}:
+    get:
+      tags: [Books]
+      summary: Get book details
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+      responses:
+        '200':
+          description: Book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/books/{bookId}/sessions:
+    get:
+      tags: [Sessions]
+      summary: List sessions for a book
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+      responses:
+        '200':
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+
+  /api/books/{bookId}/sessions/start:
+    post:
+      tags: [Sessions]
+      summary: Start a new live session for a book
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  description: Writing mode (e.g. easy/hard)
+      responses:
+        '201':
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /api/books/{bookId}/sessions/{sessionId}/continue:
+    post:
+      tags: [Sessions]
+      summary: Continue from a prior session by starting a new live session
+      description: |
+        Creates a NEW session linked to the prior session. The new session is seeded
+        from the CURRENT book requirements and CURRENT book draft content.
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '201':
+          description: New continued session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: Prior session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/books/{bookId}/sessions/{sessionId}/events:
+    get:
+      tags: [Sessions]
+      summary: Stream session events (SSE)
+      description: |
+        Server-Sent Events (text/event-stream). Used for replaying stored history and
+        streaming live updates.
+
+        Event identifiers SHOULD be stable and monotonically increasing per session
+        so clients can resume via the Last-Event-ID header.
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/books/{bookId}/book/list:
+    get:
+      tags: [BookFiles]
+      summary: List draft files for a book
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+      responses:
+        '200':
+          description: List of draft files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookFile'
+
+  /api/books/{bookId}/book/read:
+    get:
+      tags: [BookFiles]
+      summary: Read a draft file for a book
+      parameters:
+        - $ref: '#/components/parameters/BookId'
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: File name to read (must not include path separators)
+      responses:
+        '200':
+          description: File content
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, content]
+                properties:
+                  name:
+                    type: string
+                  content:
+                    type: string
+        '400':
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  parameters:
+    BookId:
+      name: bookId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Safe book identifier
+
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Session identifier
+
+  schemas:
+    Book:
+      type: object
+      required: [bookId, name]
+      properties:
+        bookId:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Session:
+      type: object
+      required: [sessionId, bookId, createdAt]
+      properties:
+        sessionId:
+          type: string
+        bookId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        mode:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, failed]
+        continuedFromSessionId:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+
+    BookFile:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
