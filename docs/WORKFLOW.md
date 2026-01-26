@@ -12,6 +12,16 @@ This repo is designed around a simple loop:
 
 If the draft changes in a way that matters for future consistency (tone, character details, world rules, plot decisions), write it down in the requirements.
 
+## Multi-book layout
+
+Each book lives in its own folder:
+
+- `books/<bookId>/requirements/` (constraints and feedback)
+- `books/<bookId>/book/` (draft chapters/sections)
+- `books/<bookId>/.sessions/` (session history logs)
+
+`<bookId>` is a safe ID derived from the book’s display name so different books never overwrite each other.
+
 ## Chunking guidance
 
 Smaller chunks are easier to review and keep on-track:

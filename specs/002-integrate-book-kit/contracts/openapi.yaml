@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Copilot Book Writer + BookKit Agents
+  version: 0.0.0
+  description: |
+    API contract additions for integrating BookKit agent prompt selection.
+
+servers:
+  - url: http://localhost:8787
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  /api/bookkit/status:
+    get:
+      summary: BookKit integration status
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookKitStatus'
+
+  /api/bookkit/agents:
+    get:
+      summary: List available BookKit agents/modes
+      responses:
+        '200':
+          description: Agent catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCatalog'
+
+  /api/sessions/{sessionId}/messages:
+    post:
+      summary: Send a user message to a session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Message accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: Bad request
+        '404':
+          description: Unknown session
+
+components:
+  schemas:
+    BookKitStatus:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+
+    AgentMode:
+      type: object
+      required: [id, displayName, promptPath]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        promptPath:
+          type: string
+
+    AgentCatalog:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentMode'
+        defaultAgentId:
+          type: string
+
+    SendMessageRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          description: The user message text.
+        agentId:
+          type: string
+          description: Optional BookKit agent/mode id to apply to this message (not persisted).

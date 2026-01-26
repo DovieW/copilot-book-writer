@@ -58,6 +58,8 @@ This starts:
 
 The default draft is written to `books/<bookId>/book/draft.md`.
 
+The agent/mode dropdown in the web UI is populated from **BookKit prompt files** vendored into `agents/bookkit/` (maintainer-updated).
+
 ## How to use (simple explanation)
 
 Think of `books/<bookId>/requirements/*.md` as “rules for the book”. The generator reads those rules and your existing draft, then writes the next piece. If you change the draft later, you can capture new constraints in `books/<bookId>/requirements/feedback.md` so future generations don’t “forget” what you changed.

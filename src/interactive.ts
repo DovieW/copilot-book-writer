@@ -12,20 +12,6 @@ export type InteractiveOptions = {
   bookId?: string;
 };
 
-type Mode = "easy" | "hard";
-
-function parseMode(text: string | undefined): Mode {
-  const t = (text || "").toLowerCase();
-  if (t.includes("mode=easy") || t.includes("mode: easy") || t.includes("easy mode")) {
-    return "easy";
-  }
-  if (t.includes("mode=hard") || t.includes("mode: hard") || t.includes("hard mode")) {
-    return "hard";
-  }
-  // Default to hard to avoid accidental over-assumption.
-  return "hard";
-}
-
 function parseBook(text: string | undefined): string {
   const t = (text || "").trim();
   const m = t.match(/BOOK\s*=\s*(.+)/i);
@@ -43,7 +29,7 @@ export async function runInteractive(options: InteractiveOptions): Promise<void>
   await client.start();
 
   try {
-    // 1) Bootstrap session: ask easy vs hard.
+    // 1) Bootstrap session: ask book name.
     const bootstrap = await client.createSession({
       model: options.model,
       tools: [askQuestionsTool],
@@ -52,16 +38,11 @@ export async function runInteractive(options: InteractiveOptions): Promise<void>
 You are onboarding for Copilot Book Writer.
 
 You MUST call the tool ask_questions first and ask:
-- header: mode
-- question: "Do you want easy mode or hard mode?"
-- options: Easy mode (make more assumptions) vs Hard mode (ask more questions)
-
-AND also ask:
 - header: book
-- question: "What is the book name? (Leave blank for default)"
+
+- question: "What is the book name?"
 
 After the user answers, respond with EXACTLY two lines:
-MODE=easy|hard
 BOOK=<book name>
         `.trim(),
       },
@@ -70,8 +51,6 @@ BOOK=<book name>
     const bootstrapResp = await bootstrap.sendAndWait({
       prompt: "Start onboarding.",
     });
-
-    const mode = parseMode(bootstrapResp?.data?.content);
 
     const rawBookName = parseBook(bootstrapResp?.data?.content);
     const bookId = slugifyBookName(rawBookName || options.bookId || "default");
@@ -91,21 +70,6 @@ BOOK=<book name>
       },
     });
 
-    const modeGuidance =
-      mode === "easy"
-        ? `
-EASY MODE:
-- Make reasonable assumptions when requirements are incomplete.
-- Ask fewer questions; only ask when blocked.
-- When you assume something important, write it back into books/${bookId}/requirements/feedback.md.
-          `.trim()
-        : `
-HARD MODE:
-- Ask more questions up-front to avoid wrong assumptions.
-- Prefer clarifying details in requirements before writing prose.
-- Keep requirements explicit and consistent.
-          `.trim();
-
     const session = await client.createSession({
       model: options.model,
       tools: [askQuestionsTool, ...fileTools],
@@ -124,8 +88,6 @@ Non-negotiables:
 - Use read_text_file/write_text_file/append_text_file/list_files to read and write repo files.
 - Keep questions targeted (1–4 at a time).
 - Do not output meta commentary; treat tool calls + file updates as the work.
-
-${modeGuidance}
 
 Stop condition:
 - If the user chooses "Stop", end the session with a short summary of what files were updated and what to do next.
