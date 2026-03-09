@@ -1,4 +1,4 @@
-# Copilot Book Writer
+# Copilot Book Writer (WIP)
 
 Create full-length books **incrementally** using the GitHub Copilot SDK.
 
